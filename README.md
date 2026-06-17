@@ -89,4 +89,3 @@ submission/
 ## Author
 
 Sruthi B S
-B.E Electronics and Communication Engineering
