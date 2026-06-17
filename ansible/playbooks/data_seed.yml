@@ -1,0 +1,126 @@
+---
+# Data seed playbook - Phase 2
+# Seeds 1000 key-value pairs with deterministic SHA256 values
+# Usage: ansible-playbook playbooks/seed.yml -e "num_keys=1000"
+
+- name: Seed Redis Cluster with data
+  hosts: redis-node-1
+  gather_facts: no
+  vars:
+    num_keys: "{{ num_keys | default(1000) }}"
+  tasks:
+    - name: Verify cluster is healthy before seeding
+      ansible.builtin.command: >
+        redis-cli -h 10.10.0.11 -p 6379 CLUSTER INFO
+      register: cluster_check
+      changed_when: false
+      failed_when: "'cluster_state:ok' not in cluster_check.stdout"
+
+    - name: Seed {{ num_keys }} keys into the cluster
+      ansible.builtin.shell: |
+        python3 << 'PYEOF'
+        import subprocess
+        import hashlib
+        import sys
+
+        num_keys = {{ num_keys }}
+
+        # Deterministic value scheme: value of key:XXXX = SHA256("key:XXXX")
+        # This allows independent recomputation for verification
+
+        inserted = 0
+        failed = 0
+        errors = []
+
+        print(f"Seeding {num_keys} keys into Redis cluster...")
+
+        for i in range(1, num_keys + 1):
+            key = f"key:{i:04d}"
+            # Deterministic value: SHA256 hex of the key itself
+            value = hashlib.sha256(key.encode()).hexdigest()
+
+            result = subprocess.run(
+                ["redis-cli", "-c", "-h", "10.10.0.11", "-p", "6379", "SET", key, value],
+                capture_output=True, text=True, timeout=10
+            )
+
+            if result.stdout.strip() == "OK":
+                inserted += 1
+            else:
+                failed += 1
+                errors.append(f"  key={key} error={result.stderr.strip() or result.stdout.strip()}")
+
+            if i % 100 == 0:
+                print(f"  Progress: {i}/{num_keys} inserted...")
+
+        print(f"\nSeed Summary:")
+        print(f"  Total keys inserted: {inserted}")
+        print(f"  Failed: {failed}")
+        if errors:
+            print("  Errors:")
+            for e in errors[:10]:
+                print(e)
+
+        PYEOF
+      args:
+        executable: /bin/bash
+      register: seed_output
+      no_log: false
+
+    - name: Display seed output
+      ansible.builtin.debug:
+        msg: "{{ seed_output.stdout_lines }}"
+
+    - name: Get key distribution across masters
+      ansible.builtin.shell: |
+        python3 << 'PYEOF'
+        import subprocess
+        import re
+
+        masters = [
+            ("10.10.0.11", 6379),
+            ("10.10.0.12", 6379),
+            ("10.10.0.13", 6379),
+        ]
+
+        print("\nKey distribution across masters:")
+        total = 0
+        for (ip, port) in masters:
+            result = subprocess.run(
+                ["redis-cli", "-h", ip, "-p", str(port), "DBSIZE"],
+                capture_output=True, text=True
+            )
+            keys = result.stdout.strip()
+
+            # Get slot range
+            info_result = subprocess.run(
+                ["redis-cli", "-h", ip, "-p", str(port), "CLUSTER", "NODES"],
+                capture_output=True, text=True
+            )
+            # Find our own entry (has "myself" flag)
+            slots_str = ""
+            for line in info_result.stdout.split("\n"):
+                if "myself" in line:
+                    parts = line.split()
+                    if len(parts) > 8:
+                        slots_str = " ".join(parts[8:])
+                    break
+
+            try:
+                keys_int = int(keys)
+                total += keys_int
+            except:
+                keys_int = "?"
+
+            print(f"  {ip}:{port} -> keys: {keys_int}  slots: {slots_str}")
+
+        print(f"  Total keys in cluster: {total}")
+        PYEOF
+      args:
+        executable: /bin/bash
+      register: distribution_output
+      changed_when: false
+
+    - name: Display key distribution
+      ansible.builtin.debug:
+        msg: "{{ distribution_output.stdout_lines }}"

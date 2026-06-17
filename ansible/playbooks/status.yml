@@ -1,0 +1,217 @@
+---
+# Status playbook - Phase 3
+# Prints a clear, readable summary of the cluster
+# Usage: ansible-playbook playbooks/status.yml
+
+- name: Gather Redis Cluster Status
+  hosts: redis-node-1
+  gather_facts: no
+  tasks:
+    - name: Get cluster nodes raw data
+      ansible.builtin.shell: |
+        redis-cli -h 10.10.0.11 -p 6379 CLUSTER NODES 2>&1
+      register: cluster_nodes_raw
+      changed_when: false
+
+    - name: Get cluster info
+      ansible.builtin.shell: |
+        redis-cli -h 10.10.0.11 -p 6379 CLUSTER INFO 2>&1
+      register: cluster_info_raw
+      changed_when: false
+
+    - name: Collect per-node info
+      ansible.builtin.shell: |
+        #!/bin/bash
+        # For each node, get: IP, version, role, slots, keys, memory, replication
+        python3 << 'PYEOF'
+        import subprocess
+        import re
+        import json
+
+        nodes_info = {}
+        all_ips = [
+            ("10.10.0.11", 6379),
+            ("10.10.0.12", 6379),
+            ("10.10.0.13", 6379),
+            ("10.10.0.14", 6379),
+            ("10.10.0.15", 6379),
+            ("10.10.0.16", 6379),
+        ]
+
+        # Get cluster nodes
+        result = subprocess.run(
+            ["redis-cli", "-h", "10.10.0.11", "-p", "6379", "CLUSTER", "NODES"],
+            capture_output=True, text=True
+        )
+        cluster_nodes_text = result.stdout.strip()
+
+        # Parse cluster nodes
+        # Format: <id> <ip:port@busport> <flags> <master_id> <ping> <pong> <epoch> <link-state> <slots...>
+        node_map = {}
+        for line in cluster_nodes_text.split("\n"):
+            if not line.strip():
+                continue
+            parts = line.split()
+            if len(parts) < 8:
+                continue
+            node_id = parts[0]
+            addr = parts[1].split("@")[0]  # ip:port
+            ip = addr.split(":")[0]
+            port = addr.split(":")[1]
+            flags = parts[2]
+            master_id = parts[3]
+            link_state = parts[7]
+            slots = " ".join(parts[8:]) if len(parts) > 8 else ""
+
+            role = "master" if "master" in flags else "replica"
+            connected = link_state == "connected"
+
+            node_map[ip] = {
+                "id": node_id,
+                "ip": ip,
+                "port": port,
+                "role": role,
+                "flags": flags,
+                "master_id": master_id,
+                "slots": slots,
+                "connected": connected,
+            }
+
+        # For each node, get INFO
+        for (ip, port) in all_ips:
+            try:
+                info_result = subprocess.run(
+                    ["redis-cli", "-h", ip, "-p", str(port), "INFO", "all"],
+                    capture_output=True, text=True, timeout=10
+                )
+                info_text = info_result.stdout
+
+                # Parse version
+                version_match = re.search(r'redis_version:(.+)', info_text)
+                version = version_match.group(1).strip() if version_match else "unknown"
+
+                # Parse memory
+                mem_match = re.search(r'used_memory_human:(.+)', info_text)
+                memory = mem_match.group(1).strip() if mem_match else "unknown"
+
+                # Parse keys
+                keys_match = re.search(r'db0:keys=(\d+)', info_text)
+                keys = int(keys_match.group(1)) if keys_match else 0
+
+                # Parse replication master host
+                master_host_match = re.search(r'master_host:(.+)', info_text)
+                master_host = master_host_match.group(1).strip() if master_host_match else None
+
+                master_port_match = re.search(r'master_port:(.+)', info_text)
+                master_port = master_port_match.group(1).strip() if master_port_match else None
+
+                master_link_match = re.search(r'master_link_status:(.+)', info_text)
+                master_link = master_link_match.group(1).strip() if master_link_match else None
+
+                if ip in node_map:
+                    node_map[ip]["version"] = version
+                    node_map[ip]["memory"] = memory
+                    node_map[ip]["keys"] = keys
+                    node_map[ip]["master_host"] = master_host
+                    node_map[ip]["master_port"] = master_port
+                    node_map[ip]["master_link"] = master_link
+                else:
+                    node_map[ip] = {
+                        "ip": ip,
+                        "port": str(port),
+                        "version": version,
+                        "memory": memory,
+                        "keys": keys,
+                        "role": "unknown",
+                        "master_host": master_host,
+                        "master_port": master_port,
+                    }
+            except Exception as e:
+                if ip in node_map:
+                    node_map[ip]["error"] = str(e)
+                else:
+                    node_map[ip] = {"ip": ip, "port": str(port), "error": str(e)}
+
+        # Build master ID to IP map
+        id_to_ip = {v["id"]: v["ip"] for k, v in node_map.items() if "id" in v}
+
+        # Print formatted status
+        cluster_state_result = subprocess.run(
+            ["redis-cli", "-h", "10.10.0.11", "-p", "6379", "CLUSTER", "INFO"],
+            capture_output=True, text=True
+        )
+        state_match = re.search(r'cluster_state:(.+)', cluster_state_result.stdout)
+        cluster_state = state_match.group(1).strip() if state_match else "unknown"
+
+        print(f"\nCluster State: {cluster_state}")
+        print()
+
+        # Masters
+        print("MASTERS")
+
+        masters = []
+
+        for ip, n in node_map.items():
+            if n.get("role") == "master":
+                masters.append((ip, n))
+
+        for ip, n in sorted(masters):
+            slots = n.get("slots", "")
+            keys = n.get("keys", 0)
+            version = n.get("version", "unknown")
+            memory = n.get("memory", "unknown")
+            port = n.get("port", "6379")
+
+            print(
+                f"  {ip}:{port} [master] "
+                f"v{version} "
+                f"slots: {slots} "
+                f"keys: {keys} "
+                f"mem: {memory}"
+            )
+
+        print()
+
+        # Replicas
+        print("REPLICAS")
+
+        replicas = []
+
+        for ip, n in node_map.items():
+            if n.get("role") == "replica":
+                replicas.append((ip, n))
+
+        for ip, n in sorted(replicas):
+
+            master_host = n.get("master_host")
+            master_port = n.get("master_port", "6379")
+
+            version = n.get("version", "unknown")
+            memory = n.get("memory", "unknown")
+            port = n.get("port", "6379")
+
+            if master_host:
+                repl_of = f"{master_host}:{master_port}"
+
+            elif n.get("master_id") and n["master_id"] != "-":
+                repl_of = f"{id_to_ip.get(n['master_id'], 'unknown')}:6379"
+
+            else:
+                repl_of = "unknown"
+
+            print(
+                f"  {ip}:{port} [replica] "
+                f"v{version} "
+                f"replicating: {repl_of} "
+                f"mem: {memory}"
+            )
+
+        PYEOF
+      args:
+        executable: /bin/bash
+      register: status_output
+      changed_when: false
+
+    - name: Display cluster status
+      ansible.builtin.debug:
+        msg: "{{ status_output.stdout_lines }}"

@@ -1,0 +1,35 @@
+✓ Docker 29.5.3 found
+✓ ansible-playbook [core 2.16.3]
+Proceeding...
+Running data verify...
+
+PLAY [Verify Redis Cluster data integrity] *************************************
+
+TASK [Verify cluster is reachable] *********************************************
+ok: [redis-node-1]
+
+TASK [Read and verify all 1000 keys] *******************************************
+ok: [redis-node-1]
+
+TASK [Display verification result] *********************************************
+ok: [redis-node-1] => {
+    "msg": [
+        "Verifying 1000 keys from Redis cluster...",
+        "  Progress: 100/1000 checked...",
+        "  Progress: 200/1000 checked...",
+        "  Progress: 300/1000 checked...",
+        "  Progress: 400/1000 checked...",
+        "  Progress: 500/1000 checked...",
+        "  Progress: 600/1000 checked...",
+        "  Progress: 700/1000 checked...",
+        "  Progress: 800/1000 checked...",
+        "  Progress: 900/1000 checked...",
+        "  Progress: 1000/1000 checked...",
+        "",
+        "PASS — 1000/1000 keys verified"
+    ]
+}
+
+PLAY RECAP *********************************************************************
+redis-node-1               : ok=3    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+

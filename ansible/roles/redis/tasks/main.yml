@@ -1,0 +1,103 @@
+---
+- name: Update apt cache
+  apt:
+    update_cache: yes
+
+- name: Install build dependencies
+  apt:
+    name:
+      - build-essential
+      - tcl
+      - wget
+      - tar
+    state: present
+
+- name: Check Redis version
+  command: redis-server --version
+  register: redis_version_check
+  failed_when: false
+  changed_when: false
+
+- name: Download Redis 7.0.15
+  get_url:
+    url: "https://download.redis.io/releases/redis-{{ redis_version }}.tar.gz"
+    dest: "/tmp/redis-{{ redis_version }}.tar.gz"
+    mode: '0644'
+  when: redis_version_check.rc != 0 or '7.0.15' not in redis_version_check.stdout
+
+- name: Extract Redis source
+  unarchive:
+    src: /tmp/redis-7.0.15.tar.gz
+    dest: /tmp
+    remote_src: yes
+  when: redis_version_check.rc != 0 or '7.0.15' not in redis_version_check.stdout
+
+- name: Build Redis
+  command: make
+  args:
+    chdir: "/tmp/redis-{{ redis_version }}"
+  when: redis_version_check.rc != 0 or '7.0.15' not in redis_version_check.stdout
+
+- name: Install Redis
+  command: make install
+  args:
+    chdir: "/tmp/redis-{{ redis_version }}"
+  when: redis_version_check.rc != 0 or '7.0.15' not in redis_version_check.stdout
+
+- name: Create Redis data directory
+  file:
+    path: /var/lib/redis
+    state: directory
+    mode: '0755'
+
+- name: Deploy redis.conf
+  template:
+    src: redis.conf.j2
+    dest: /etc/redis.conf
+    mode: '0644'
+
+- name: Remove stale redis pid
+  file:
+    path: /var/run/redis.pid
+    state: absent
+
+- name: Stop Redis
+  shell: pkill redis-server || true
+  changed_when: false
+
+- name: Remove stale PID file
+  file:
+    path: /var/run/redis.pid
+    state: absent
+
+- name: Check Redis status
+  shell: redis-cli PING
+  register: redis_ping
+  failed_when: false
+  changed_when: false
+
+- name: Ensure nodes.conf exists only when Redis creates it
+  stat:
+    path: /var/lib/redis/nodes.conf
+  register: nodes_conf
+
+- name: Restart Redis cleanly
+  shell: |
+    pkill redis-server || true
+    sleep 2
+    redis-server /etc/redis.conf
+  changed_when: true
+
+- name: Wait for Redis port
+  wait_for:
+    host: 127.0.0.1
+    port: 6379
+    timeout: 30
+
+- name: Verify Redis responds
+  command: redis-cli PING
+  register: redis_ping_after_start
+  retries: 10
+  delay: 3
+  until: redis_ping_after_start.stdout == "PONG"
+  changed_when: false

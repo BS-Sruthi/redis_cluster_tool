@@ -1,0 +1,53 @@
+✓ Docker 29.5.3 found
+✓ ansible-playbook [core 2.16.3]
+Proceeding...
+Running data seed...
+Keys: 1000
+
+PLAY [Seed Redis Cluster with data] ********************************************
+
+TASK [Verify cluster is healthy before seeding] ********************************
+ok: [redis-node-1]
+
+TASK [Seed 1000 keys into the cluster] *****************************************
+changed: [redis-node-1]
+
+TASK [Display seed output] *****************************************************
+ok: [redis-node-1] => {
+    "msg": [
+        "Seeding 1000 keys into Redis cluster...",
+        "  Progress: 100/1000 inserted...",
+        "  Progress: 200/1000 inserted...",
+        "  Progress: 300/1000 inserted...",
+        "  Progress: 400/1000 inserted...",
+        "  Progress: 500/1000 inserted...",
+        "  Progress: 600/1000 inserted...",
+        "  Progress: 700/1000 inserted...",
+        "  Progress: 800/1000 inserted...",
+        "  Progress: 900/1000 inserted...",
+        "  Progress: 1000/1000 inserted...",
+        "",
+        "Seed Summary:",
+        "  Total keys inserted: 1000",
+        "  Failed: 0"
+    ]
+}
+
+TASK [Get key distribution across masters] *************************************
+ok: [redis-node-1]
+
+TASK [Display key distribution] ************************************************
+ok: [redis-node-1] => {
+    "msg": [
+        "",
+        "Key distribution across masters:",
+        "  10.10.0.11:6379 -> keys: 333  slots: 0-5460",
+        "  10.10.0.12:6379 -> keys: 324  slots: 5461-10922",
+        "  10.10.0.13:6379 -> keys: 343  slots: 10923-16383",
+        "  Total keys in cluster: 1000"
+    ]
+}
+
+PLAY RECAP *********************************************************************
+redis-node-1               : ok=5    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+

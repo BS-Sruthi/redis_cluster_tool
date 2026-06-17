@@ -1,0 +1,72 @@
+---
+- name: Create Redis Cluster
+  hosts: redis-node-1
+  gather_facts: no
+
+  tasks:
+
+    - name: Wait for all Redis nodes
+      shell: redis-cli -h {{ item }} -p 6379 PING
+      loop:
+        - 10.10.0.11
+        - 10.10.0.12
+        - 10.10.0.13
+        - 10.10.0.14
+        - 10.10.0.15
+        - 10.10.0.16
+      changed_when: false
+
+    - name: Check cluster info
+      shell: |
+        redis-cli -h 10.10.0.11 -p 6379 CLUSTER INFO
+      register: cluster_info
+      failed_when: false
+      changed_when: false
+
+    - name: Determine whether cluster already exists
+      set_fact:
+        cluster_already_ok: "{{ 'cluster_state:ok' in cluster_info.stdout and 'cluster_known_nodes:6' in cluster_info.stdout }}"
+
+    - name: Show cluster status
+      debug:
+        msg: "Cluster already formed: {{ cluster_already_ok }}"
+
+    - name: Create cluster
+      shell: |
+        redis-cli --cluster create \
+        10.10.0.11:6379 \
+        10.10.0.12:6379 \
+        10.10.0.13:6379 \
+        10.10.0.14:6379 \
+        10.10.0.15:6379 \
+        10.10.0.16:6379 \
+        --cluster-replicas 1 \
+        --cluster-yes
+      when: not cluster_already_ok
+
+    - name: Wait for cluster to stabilize
+      pause:
+        seconds: 10
+      when: not cluster_already_ok
+
+    - name: Wait until cluster becomes healthy
+      shell: |
+        redis-cli -h 10.10.0.11 -p 6379 CLUSTER INFO
+      register: health_check
+      retries: 20
+      delay: 3
+      until: "'cluster_state:ok' in health_check.stdout"
+      changed_when: false
+
+    - name: Get cluster nodes
+      shell: redis-cli CLUSTER NODES
+      register: cluster_nodes
+      changed_when: false
+
+    - name: Show cluster info
+      debug:
+        var: health_check.stdout_lines
+
+    - name: Show cluster topology
+      debug:
+        var: cluster_nodes.stdout_lines

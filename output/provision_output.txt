@@ -1,0 +1,254 @@
+✓ Docker 29.5.3 found
+✓ ansible-playbook [core 2.16.3]
+Proceeding...
+Running provision...
+Version: 7.0.15
+Masters: 3
+Replicas per master: 1
+
+PLAY [Install and Configure Redis] *********************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [redis-node-3]
+ok: [redis-node-4]
+ok: [redis-node-5]
+ok: [redis-node-2]
+ok: [redis-node-1]
+ok: [redis-node-6]
+
+TASK [redis : Update apt cache] ************************************************
+changed: [redis-node-3]
+changed: [redis-node-5]
+changed: [redis-node-4]
+changed: [redis-node-2]
+changed: [redis-node-1]
+changed: [redis-node-6]
+
+TASK [redis : Install build dependencies] **************************************
+ok: [redis-node-4]
+ok: [redis-node-1]
+ok: [redis-node-2]
+ok: [redis-node-5]
+ok: [redis-node-3]
+ok: [redis-node-6]
+
+TASK [redis : Check Redis version] *********************************************
+ok: [redis-node-1]
+ok: [redis-node-5]
+ok: [redis-node-3]
+ok: [redis-node-4]
+ok: [redis-node-2]
+ok: [redis-node-6]
+
+TASK [redis : Download Redis 7.0.15] *******************************************
+skipping: [redis-node-1]
+skipping: [redis-node-2]
+skipping: [redis-node-3]
+skipping: [redis-node-4]
+skipping: [redis-node-5]
+skipping: [redis-node-6]
+
+TASK [redis : Extract Redis source] ********************************************
+skipping: [redis-node-1]
+skipping: [redis-node-2]
+skipping: [redis-node-3]
+skipping: [redis-node-4]
+skipping: [redis-node-5]
+skipping: [redis-node-6]
+
+TASK [redis : Build Redis] *****************************************************
+skipping: [redis-node-1]
+skipping: [redis-node-2]
+skipping: [redis-node-3]
+skipping: [redis-node-4]
+skipping: [redis-node-5]
+skipping: [redis-node-6]
+
+TASK [redis : Install Redis] ***************************************************
+skipping: [redis-node-1]
+skipping: [redis-node-2]
+skipping: [redis-node-3]
+skipping: [redis-node-4]
+skipping: [redis-node-5]
+skipping: [redis-node-6]
+
+TASK [redis : Create Redis data directory] *************************************
+ok: [redis-node-4]
+ok: [redis-node-1]
+ok: [redis-node-5]
+ok: [redis-node-2]
+ok: [redis-node-3]
+ok: [redis-node-6]
+
+TASK [redis : Deploy redis.conf] ***********************************************
+ok: [redis-node-5]
+ok: [redis-node-2]
+ok: [redis-node-1]
+ok: [redis-node-4]
+ok: [redis-node-3]
+ok: [redis-node-6]
+
+TASK [redis : Remove stale redis pid] ******************************************
+changed: [redis-node-1]
+changed: [redis-node-2]
+changed: [redis-node-3]
+changed: [redis-node-4]
+changed: [redis-node-5]
+changed: [redis-node-6]
+
+TASK [redis : Stop Redis] ******************************************************
+ok: [redis-node-1]
+ok: [redis-node-2]
+ok: [redis-node-3]
+ok: [redis-node-5]
+ok: [redis-node-4]
+ok: [redis-node-6]
+
+TASK [redis : Remove stale PID file] *******************************************
+ok: [redis-node-1]
+ok: [redis-node-2]
+ok: [redis-node-3]
+ok: [redis-node-4]
+ok: [redis-node-5]
+ok: [redis-node-6]
+
+TASK [redis : Check Redis status] **********************************************
+ok: [redis-node-1]
+ok: [redis-node-3]
+ok: [redis-node-2]
+ok: [redis-node-4]
+ok: [redis-node-5]
+ok: [redis-node-6]
+
+TASK [redis : Ensure nodes.conf exists only when Redis creates it] *************
+ok: [redis-node-2]
+ok: [redis-node-1]
+ok: [redis-node-3]
+ok: [redis-node-4]
+ok: [redis-node-5]
+ok: [redis-node-6]
+
+TASK [redis : Restart Redis cleanly] *******************************************
+changed: [redis-node-1]
+changed: [redis-node-2]
+changed: [redis-node-3]
+changed: [redis-node-5]
+changed: [redis-node-4]
+changed: [redis-node-6]
+
+TASK [redis : Wait for Redis port] *********************************************
+ok: [redis-node-4]
+ok: [redis-node-3]
+ok: [redis-node-5]
+ok: [redis-node-2]
+ok: [redis-node-1]
+ok: [redis-node-6]
+
+TASK [redis : Verify Redis responds] *******************************************
+ok: [redis-node-1]
+ok: [redis-node-2]
+ok: [redis-node-3]
+ok: [redis-node-4]
+ok: [redis-node-5]
+ok: [redis-node-6]
+
+PLAY [Create Redis Cluster] ****************************************************
+
+TASK [Wait for all Redis nodes] ************************************************
+ok: [redis-node-1] => (item=10.10.0.11)
+ok: [redis-node-1] => (item=10.10.0.12)
+ok: [redis-node-1] => (item=10.10.0.13)
+ok: [redis-node-1] => (item=10.10.0.14)
+ok: [redis-node-1] => (item=10.10.0.15)
+ok: [redis-node-1] => (item=10.10.0.16)
+
+TASK [Check cluster info] ******************************************************
+ok: [redis-node-1]
+
+TASK [Determine whether cluster already exists] ********************************
+ok: [redis-node-1]
+
+TASK [Show cluster status] *****************************************************
+ok: [redis-node-1] => {
+    "msg": "Cluster already formed: True"
+}
+
+TASK [Create cluster] **********************************************************
+skipping: [redis-node-1]
+
+TASK [Wait for cluster to stabilize] *******************************************
+skipping: [redis-node-1]
+
+TASK [Wait until cluster becomes healthy] **************************************
+ok: [redis-node-1]
+
+TASK [Get cluster nodes] *******************************************************
+ok: [redis-node-1]
+
+TASK [Show cluster info] *******************************************************
+ok: [redis-node-1] => {
+    "health_check.stdout_lines": [
+        "cluster_state:ok",
+        "cluster_slots_assigned:16384",
+        "cluster_slots_ok:16384",
+        "cluster_slots_pfail:0",
+        "cluster_slots_fail:0",
+        "cluster_known_nodes:6",
+        "cluster_size:3",
+        "cluster_current_epoch:6",
+        "cluster_my_epoch:1",
+        "cluster_stats_messages_ping_sent:11",
+        "cluster_stats_messages_pong_sent:14",
+        "cluster_stats_messages_sent:25",
+        "cluster_stats_messages_ping_received:14",
+        "cluster_stats_messages_pong_received:11",
+        "cluster_stats_messages_received:25",
+        "total_cluster_links_buffer_limit_exceeded:0"
+    ]
+}
+
+TASK [Show cluster topology] ***************************************************
+ok: [redis-node-1] => {
+    "cluster_nodes.stdout_lines": [
+        "3da1f4de4abaa44db468052f41fa8c6a6004c092 10.10.0.13:6379@16379 master - 0 1781620987000 3 connected 10923-16383",
+        "d28b8e110186a5fc9df0ddd10fb3c24625595e7d 10.10.0.15:6379@16379 slave 2a6cd0da9b861cee2810d8105761a00ff9722d51 0 1781620987347 1 connected",
+        "6a9a8cc708abd84f719568ea85bfffcfe6d4c825 10.10.0.14:6379@16379 slave 3da1f4de4abaa44db468052f41fa8c6a6004c092 0 1781620988000 3 connected",
+        "2a6cd0da9b861cee2810d8105761a00ff9722d51 10.10.0.11:6379@16379 myself,master - 0 1781620988000 1 connected 0-5460",
+        "e6a4cad3081706ec579692a8715bf2e1f66ea9f3 10.10.0.16:6379@16379 slave 48ffd4f5102e0e29637eb33d577fb75b052b639d 0 1781620988252 2 connected",
+        "48ffd4f5102e0e29637eb33d577fb75b052b639d 10.10.0.12:6379@16379 master - 0 1781620988355 2 connected 5461-10922"
+    ]
+}
+
+PLAY [Show Redis Cluster Topology] *********************************************
+
+TASK [Get cluster state] *******************************************************
+ok: [redis-node-1]
+
+TASK [Get cluster nodes] *******************************************************
+ok: [redis-node-1]
+
+TASK [Print cluster state] *****************************************************
+ok: [redis-node-1] => {
+    "msg": "cluster_state:ok"
+}
+
+TASK [Print topology] **********************************************************
+ok: [redis-node-1] => {
+    "msg": [
+        "3da1f4de4abaa44db468052f41fa8c6a6004c092 10.10.0.13:6379@16379 master - 0 1781620989362 3 connected 10923-16383",
+        "d28b8e110186a5fc9df0ddd10fb3c24625595e7d 10.10.0.15:6379@16379 slave 2a6cd0da9b861cee2810d8105761a00ff9722d51 0 1781620987347 1 connected",
+        "6a9a8cc708abd84f719568ea85bfffcfe6d4c825 10.10.0.14:6379@16379 slave 3da1f4de4abaa44db468052f41fa8c6a6004c092 0 1781620988000 3 connected",
+        "2a6cd0da9b861cee2810d8105761a00ff9722d51 10.10.0.11:6379@16379 myself,master - 0 1781620988000 1 connected 0-5460",
+        "e6a4cad3081706ec579692a8715bf2e1f66ea9f3 10.10.0.16:6379@16379 slave 48ffd4f5102e0e29637eb33d577fb75b052b639d 0 1781620988252 2 connected",
+        "48ffd4f5102e0e29637eb33d577fb75b052b639d 10.10.0.12:6379@16379 master - 0 1781620988355 2 connected 5461-10922"
+    ]
+}
+
+PLAY RECAP *********************************************************************
+redis-node-1               : ok=26   changed=3    unreachable=0    failed=0    skipped=6    rescued=0    ignored=0   
+redis-node-2               : ok=14   changed=3    unreachable=0    failed=0    skipped=4    rescued=0    ignored=0   
+redis-node-3               : ok=14   changed=3    unreachable=0    failed=0    skipped=4    rescued=0    ignored=0   
+redis-node-4               : ok=14   changed=3    unreachable=0    failed=0    skipped=4    rescued=0    ignored=0   
+redis-node-5               : ok=14   changed=3    unreachable=0    failed=0    skipped=4    rescued=0    ignored=0   
+redis-node-6               : ok=14   changed=3    unreachable=0    failed=0    skipped=4    rescued=0    ignored=0   
+

@@ -1,0 +1,80 @@
+---
+# Data verify playbook - Phase 2
+# Reads back all keys, recomputes expected SHA256 values, compares
+# Usage: ansible-playbook playbooks/verify.yml -e "num_keys=1000"
+
+- name: Verify Redis Cluster data integrity
+  hosts: redis-node-1
+  gather_facts: no
+  vars:
+    num_keys: 1000
+  tasks:
+    - name: Verify cluster is reachable
+      ansible.builtin.command: >
+        redis-cli -h 10.10.0.11 -p 6379 PING
+      register: ping_check
+      changed_when: false
+      failed_when: ping_check.stdout != "PONG"
+
+    - name: Read and verify all {{ num_keys }} keys
+      ansible.builtin.shell: |
+        python3 << 'PYEOF'
+        import subprocess
+        import hashlib
+        import sys
+
+        num_keys = {{ num_keys }}
+
+        verified = 0
+        missing = 0
+        mismatched = 0
+        missing_keys = []
+        mismatch_keys = []
+
+        print(f"Verifying {num_keys} keys from Redis cluster...")
+
+        for i in range(1, num_keys + 1):
+            key = f"key:{i:04d}"
+            expected_value = hashlib.sha256(key.encode()).hexdigest()
+
+            result = subprocess.run(
+                ["redis-cli", "-c", "-h", "10.10.0.11", "-p", "6379", "GET", key],
+                capture_output=True, text=True, timeout=10
+            )
+
+            actual_value = result.stdout.strip()
+
+            if actual_value == "" or actual_value == "(nil)":
+                missing += 1
+                missing_keys.append(key)
+            elif actual_value == expected_value:
+                verified += 1
+            else:
+                mismatched += 1
+                mismatch_keys.append(key)
+
+            if i % 100 == 0:
+                print(f"  Progress: {i}/{num_keys} checked...")
+
+        print()
+        total_issues = missing + mismatched
+        if total_issues == 0:
+            print(f"PASS — {verified}/{num_keys} keys verified")
+        else:
+            print(f"FAIL — {missing} keys missing, {mismatched} values mismatched")
+            if missing_keys[:5]:
+                print(f"  Missing (first 5): {missing_keys[:5]}")
+            if mismatch_keys[:5]:
+                print(f"  Mismatched (first 5): {mismatch_keys[:5]}")
+
+        sys.exit(0 if total_issues == 0 else 1)
+        PYEOF
+      args:
+        executable: /bin/bash
+      register: verify_output
+      changed_when: false
+      failed_when: verify_output.rc != 0
+
+    - name: Display verification result
+      ansible.builtin.debug:
+        msg: "{{ verify_output.stdout_lines }}"

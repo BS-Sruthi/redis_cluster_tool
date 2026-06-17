@@ -1,0 +1,24 @@
+---
+- name: Show Redis Cluster Topology
+  hosts: redis-node-1
+  gather_facts: no
+
+  tasks:
+
+    - name: Get cluster state
+      shell: redis-cli CLUSTER INFO | grep '^cluster_state:'
+      register: cluster_state
+      changed_when: false
+
+    - name: Get cluster nodes
+      shell: redis-cli CLUSTER NODES
+      register: cluster_nodes
+      changed_when: false
+
+    - name: Print cluster state
+      debug:
+        msg: "{{ cluster_state.stdout }}"
+
+    - name: Print topology
+      debug:
+        msg: "{{ cluster_nodes.stdout_lines }}"

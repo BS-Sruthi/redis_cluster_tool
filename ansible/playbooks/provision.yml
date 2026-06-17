@@ -1,0 +1,11 @@
+---
+- name: Install and Configure Redis
+  hosts: redis
+  become: yes
+
+  roles:
+    - redis
+
+- import_playbook: create_cluster.yml
+
+- import_playbook: topology.yml

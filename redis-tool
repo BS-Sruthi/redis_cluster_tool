@@ -1,0 +1,182 @@
+#!/bin/bash
+
+set -e
+
+check_prereqs() {
+
+  if command -v podman >/dev/null 2>&1; then
+    echo "✓ Podman $(podman --version | awk '{print $3}') found"
+
+  elif command -v docker >/dev/null 2>&1; then
+    echo "✓ Docker $(docker --version | awk '{print $3}' | tr -d ',') found"
+
+  else
+    echo "✗ Container runtime not found (Docker or Podman)"
+    echo "Install Podman: https://podman.io/docs/installation"
+    echo "Install Docker: https://docs.docker.com/engine/install/"
+    exit 1
+  fi
+
+  if command -v ansible-playbook >/dev/null 2>&1; then
+    echo "✓ $(ansible-playbook --version | head -1)"
+  else
+    echo "✗ Ansible not found"
+    echo "Install: pip install ansible"
+    exit 1
+  fi
+
+  echo "Proceeding..."
+}
+
+ANSIBLE_DIR="$(dirname "$0")/ansible"
+
+check_prereqs
+
+case "$1" in
+
+provision)
+
+  VERSION="7.0.15"
+  MASTERS="3"
+  REPLICAS="1"
+
+  shift
+
+  while [[ $# -gt 0 ]]
+  do
+    case "$1" in
+      --version)
+        VERSION="$2"
+        shift 2
+        ;;
+      --masters)
+        MASTERS="$2"
+        shift 2
+        ;;
+      --replicas-per-master)
+        REPLICAS="$2"
+        shift 2
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
+
+  echo "Running provision..."
+  echo "Version: $VERSION"
+  echo "Masters: $MASTERS"
+  echo "Replicas per master: $REPLICAS"
+
+  cd "$ANSIBLE_DIR"
+
+  ansible-playbook playbooks/provision.yml \
+  -e target_redis_version="$VERSION" \
+  -e masters="$MASTERS" \
+  -e replicas_per_master="$REPLICAS"
+  ;;
+
+  status)
+    echo "Running status..."
+    cd "$ANSIBLE_DIR"
+    ansible-playbook playbooks/status.yml
+    ;;
+
+  data)
+    case "$2" in
+
+seed)
+
+  KEYS=1000
+
+  shift 2
+
+  while [[ $# -gt 0 ]]
+  do
+    case "$1" in
+      --keys)
+        KEYS="$2"
+        shift 2
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
+
+  echo "Running data seed..."
+  echo "Keys: $KEYS"
+
+  cd "$ANSIBLE_DIR"
+
+  ansible-playbook playbooks/data_seed.yml \
+  -e num_keys="$KEYS"
+;;
+
+      verify)
+        echo "Running data verify..."
+        cd "$ANSIBLE_DIR"
+        ansible-playbook playbooks/data_verify.yml
+        ;;
+
+      *)
+        echo "Usage:"
+        echo "./redis-tool data seed --keys 1000"
+        echo "./redis-tool data verify"
+        exit 1
+        ;;
+    esac
+    ;;
+
+upgrade)
+
+  TARGET_VERSION="7.2.6"
+  STRATEGY="rolling"
+
+  shift
+
+  while [[ $# -gt 0 ]]
+  do
+    case "$1" in
+      --target-version)
+        TARGET_VERSION="$2"
+        shift 2
+        ;;
+      --strategy)
+        STRATEGY="$2"
+        shift 2
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
+
+  echo "Running upgrade..."
+  echo "Target Version: $TARGET_VERSION"
+  echo "Strategy: $STRATEGY"
+
+  cd "$ANSIBLE_DIR"
+
+  ansible-playbook playbooks/upgrade.yml \
+    -e target_version="$TARGET_VERSION" \
+    -e strategy="$STRATEGY"
+  ;;
+
+  verify)
+    echo "Running full verification..."
+    cd "$ANSIBLE_DIR"
+    ansible-playbook playbooks/full_verify.yml
+    ;;
+
+  *)
+    echo "Usage:"
+    echo "./redis-tool provision"
+    echo "./redis-tool status"
+    echo "./redis-tool data seed --keys 1000"
+    echo "./redis-tool data verify"
+    echo "./redis-tool upgrade"
+    echo "./redis-tool verify --full"
+    exit 1
+    ;;
+esac

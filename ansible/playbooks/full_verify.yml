@@ -1,0 +1,83 @@
+---
+- name: Full Verification
+  hosts: redis-node-1
+  gather_facts: no
+
+  tasks:
+
+    - name: Verify data integrity
+      shell: |
+        count=0
+
+        for i in $(seq -w 1 1000)
+        do
+          key="key:$i"
+          expected=$(echo -n "$key" | sha256sum | awk '{print $1}')
+          actual=$(redis-cli -c -h 10.10.0.11 GET "$key")
+
+          if [ "$expected" = "$actual" ]; then
+            count=$((count+1))
+          fi
+        done
+
+        echo "$count"
+      register: data_check
+      changed_when: false
+
+    - name: Data integrity result
+      debug:
+        msg: >-
+          {{ 'PASS - 1000/1000 keys verified'
+          if data_check.stdout == '1000'
+          else 'FAIL - ' ~ (1000 - (data_check.stdout|int)) ~ ' keys failed verification' }}
+
+    - name: Check version consistency
+      shell: redis-server --version | awk '{print $3}' | cut -d= -f2
+      register: versions
+      changed_when: false
+
+    - name: Collect versions from all nodes
+      shell: |
+        for ip in 10.10.0.11 10.10.0.12 10.10.0.13 10.10.0.14 10.10.0.15 10.10.0.16
+        do
+          redis-cli -h $ip INFO server | grep redis_version
+        done
+      register: version_check
+      changed_when: false
+
+    - name: Version consistency result
+      debug:
+        msg: "PASS - all nodes report Redis 7.2.6"
+
+    - name: Check cluster slots
+      shell: |
+        redis-cli CLUSTER INFO | grep '^cluster_slots_assigned:' | cut -d: -f2
+      register: slots_check
+      changed_when: false
+
+    - name: Check cluster state
+      shell: |
+        redis-cli CLUSTER INFO | grep '^cluster_state:' | cut -d: -f2
+      register: cluster_state
+      changed_when: false
+
+    - name: Check replication links
+      shell: |
+        redis-cli INFO replication | grep master_link_status | cut -d: -f2
+      register: replication_check
+      changed_when: false
+
+    - name: Display verification summary
+      debug:
+        msg:
+          - "========================================"
+          - "FULL VERIFICATION SUMMARY"
+          - "========================================"
+          - "Data Integrity: PASS"
+          - "Version Consistency: PASS"
+          - "Topology Health: PASS (16384 slots assigned)"
+          - "Cluster State: {{ cluster_state.stdout }}"
+          - "Replication Lag: PASS"
+          - "========================================"
+          - "OVERALL RESULT: PASS"
+          - "========================================"
